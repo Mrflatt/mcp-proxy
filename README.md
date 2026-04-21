@@ -2,7 +2,7 @@
 
 A single-binary MCP proxy that connects AI clients (Claude, Copilot, Cursor, etc.) to one or more upstream MCP servers, with built-in authentication support for Google Cloud and static bearer tokens.
 
-Instead of flooding the LLM context with dozens of tools from multiple servers, mcp-proxy exposes three lightweight meta-tools — `mcp_discover`, `mcp_search`, and `mcp_call` — so the model can find and invoke what it needs on demand. A direct mode is also available when full tool visibility is preferred.
+Instead of flooding the LLM context with dozens of tools from multiple servers, mcp-proxy exposes a single `mcp` meta-tool so the model can discover and invoke upstream tools on demand. A direct mode is also available when full tool visibility is preferred.
 
 ## Installation
 
@@ -42,21 +42,20 @@ Requires Go 1.21+.
 }
 ```
 
-The LLM will call `mcp_discover` to see what tools are available, then use `mcp_call` to invoke them.
-
 ## How it works
 
 ### Proxy mode (default)
 
-mcp-proxy exposes three tools to the AI client:
+mcp-proxy exposes a single `mcp` tool to the AI client:
 
-| Tool | Description |
+| Call | Description |
 |------|-------------|
-| `mcp_discover` | Lists all tools across all upstream servers |
-| `mcp_search` | Filters tools by name or description |
-| `mcp_call` | Calls a tool by its `server__toolname` identifier |
+| `mcp({})` | List all servers with tool counts |
+| `mcp({ server: "name" })` | List tools for a specific server |
+| `mcp({ search: "query" })` | Search tools by server or tool name |
+| `mcp({ tool: "server_toolname", arguments: {} })` | Call a tool |
 
-Tool names follow the `server__toolname` convention (double underscore), so `my-api__list_users` unambiguously identifies the `list_users` tool on the `my-api` server.
+Tool names use the `server_toolname` convention, so `my-api_list_users` unambiguously identifies the `list_users` tool on the `my-api` server.
 
 ### Direct mode
 
@@ -87,6 +86,8 @@ Override with: `mcp-proxy --config /path/to/config.json`
         "type": "bearer",
         "tokenEnv": "MY_API_TOKEN"
       },
+      "eager": true,
+      "keepalive": "30s",
       "excludeTools": ["internal_tool", "debug_tool"],
       "directTools": false
     },
@@ -108,14 +109,16 @@ Override with: `mcp-proxy --config /path/to/config.json`
 | Field | Type | Description |
 |-------|------|-------------|
 | `url` | string | HTTP upstream endpoint (streamable MCP) |
-| `headers` | object | Extra HTTP headers added to every request |
+| `headers` | object | Extra HTTP headers added to every request. Values support `${VAR}` interpolation |
 | `command` | string | Command to run as a stdio MCP server |
 | `args` | array | Arguments for the stdio command |
-| `env` | object | Extra environment variables for the subprocess. Values support `${VAR}` interpolation from the current environment |
+| `env` | object | Extra environment variables for the subprocess. Values support `${VAR}` interpolation |
 | `auth` | object | Authentication config (see below) |
+| `eager` | bool | Connect at startup instead of on first use |
+| `keepalive` | string | Ping interval to keep the connection alive (e.g. `"30s"`) |
 | `directTools` | `true` or `["tool1","tool2"]` | Expose all or specific tools directly, bypassing the meta-tool layer |
 | `noPrefix` | bool | Omit the server name prefix from tool names (`toolname` instead of `server_toolname`). Only safe when tool names are unique across all servers |
-| `excludeTools` | array | Tool names to hide from the LLM |
+| `excludeTools` | array | Upstream tool names to hide from the LLM |
 
 ### Authentication
 
@@ -145,6 +148,8 @@ Use `token` for a literal value or `tokenEnv` to read from an environment variab
 
 Uses Application Default Credentials. Run `gcloud auth application-default login` to set up ADC locally.
 
+Add `"includeEmail": true` to include the service account email in the token claim (required by some IAP-protected endpoints).
+
 #### Google access token (OAuth2)
 
 ```json
@@ -162,7 +167,8 @@ Add `serviceAccount` to either Google type to impersonate a service account befo
 {
   "type": "google-idtoken",
   "audience": "https://api.example.com",
-  "serviceAccount": "proxy-sa@my-project.iam.gserviceaccount.com"
+  "serviceAccount": "proxy-sa@my-project.iam.gserviceaccount.com",
+  "includeEmail": true
 }
 ```
 
@@ -198,13 +204,13 @@ You can expose some servers directly while keeping others behind the meta-tool l
 }
 ```
 
-`always-needed` tools appear directly in the client's tool list as `always-needed_toolname`. `partially-direct` exposes only `ping` and `list_interfaces` directly — its other tools are still reachable via `mcp_discover`. `large-api` tools are only visible after calling `mcp_discover` or `mcp_search`.
+`always-needed` tools appear directly in the client's tool list as `always-needed_toolname`. `partially-direct` exposes only `ping` and `list_interfaces` directly — its other tools are still discoverable via `mcp({ server: "partially-direct" })`. `large-api` tools are only visible after calling `mcp({})` or `mcp({ search: "..." })`.
 
 > [!NOTE]
-> `mcp_discover` and `mcp_search` only list tools not exposed via `directTools`.
+> `mcp({})` and `mcp({ search })` only list tools not exposed via `directTools`.
 
 > [!NOTE]
-> `noPrefix: true` is safe only when tool names are unique across all servers. If two servers expose a tool with the same name, the last one to appear in `mcp_discover` wins.
+> `noPrefix: true` is safe only when tool names are unique across all servers. If two servers expose a tool with the same name, the last one wins.
 
 ## CLI flags
 
