@@ -30,13 +30,55 @@ Requires Go 1.21+.
 }
 ```
 
-2. Add mcp-proxy to your client config (Claude Desktop example):
+2. Add mcp-proxy to your client config:
 
+**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
     "proxy": {
       "command": "mcp-proxy"
+    }
+  }
+}
+```
+
+**VS Code Copilot** (`.vscode/mcp.json` or run `MCP: Open User Configuration`):
+```json
+{
+  "servers": {
+    "proxy": {
+      "command": "mcp-proxy"
+    }
+  }
+}
+```
+
+**Claude Code** — run once to register:
+```bash
+claude mcp add --transport stdio proxy -- mcp-proxy
+```
+Or edit `~/.claude.json` directly:
+```json
+{
+  "mcpServers": {
+    "proxy": {
+      "type": "stdio",
+      "command": "mcp-proxy",
+      "args": []
+    }
+  }
+}
+```
+
+**GitHub Copilot CLI** (`~/.copilot/mcp-config.json`):
+```json
+{
+  "mcpServers": {
+    "proxy": {
+      "type": "stdio",
+      "command": "mcp-proxy",
+      "args": []
     }
   }
 }
