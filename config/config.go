@@ -63,7 +63,7 @@ type ServerConfig struct {
 	// DirectTools exposes tools directly on the proxy. true = all tools,
 	// ["tool1","tool2"] = only those tools (rest go through discover/call).
 	DirectTools DirectTools `json:"directTools,omitempty"`
-	// NoPrefix omits the server name prefix from tool names (toolname instead of server__toolname).
+	// NoPrefix omits the server name prefix from tool names (toolname instead of server-toolname).
 	// Use only when tool names are unique across all servers.
 	NoPrefix bool `json:"noPrefix,omitempty"`
 	// ExcludeTools lists tool names to hide from the LLM.

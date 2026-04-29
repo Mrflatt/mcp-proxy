@@ -95,9 +95,9 @@ mcp-proxy exposes a single `mcp` tool to the AI client:
 | `mcp({})` | List all servers with tool counts |
 | `mcp({ server: "name" })` | List tools for a specific server |
 | `mcp({ search: "query" })` | Search tools by server or tool name |
-| `mcp({ tool: "server_toolname", arguments: {} })` | Call a tool |
+| `mcp({ tool: "server-toolname", arguments: {} })` | Call a tool |
 
-Tool names use the `server_toolname` convention, so `my-api_list_users` unambiguously identifies the `list_users` tool on the `my-api` server.
+Tool names use the `server-toolname` convention, so `my-api-list_users` identifies the `list_users` tool on the `my-api` server.
 
 ### Direct mode
 
@@ -107,7 +107,7 @@ When you want the LLM to see all upstream tools natively, use `--direct`:
 mcp-proxy --direct
 ```
 
-Each upstream tool is registered directly as `servername_toolname`. You can also enable this per server in config with `"directTools": true`, or for specific tools with `"directTools": ["tool1", "tool2"]`.
+Each upstream tool is registered directly as `servername-toolname`. You can also enable this per server in config with `"directTools": true`, or for specific tools with `"directTools": ["tool1", "tool2"]`.
 
 ## Configuration
 
@@ -159,7 +159,7 @@ Override with: `mcp-proxy --config /path/to/config.json`
 | `eager` | bool | Connect at startup instead of on first use |
 | `keepalive` | string | Ping interval to keep the connection alive (e.g. `"30s"`) |
 | `directTools` | `true` or `["tool1","tool2"]` | Expose all or specific tools directly, bypassing the meta-tool layer |
-| `noPrefix` | bool | Omit the server name prefix from tool names (`toolname` instead of `server_toolname`). Only safe when tool names are unique across all servers |
+| `noPrefix` | bool | Omit the server name prefix from tool names (`toolname` instead of `server-toolname`). Only safe when tool names are unique across all servers |
 | `excludeTools` | array | Upstream tool names to hide from the LLM |
 
 ### Authentication
@@ -246,7 +246,7 @@ You can expose some servers directly while keeping others behind the meta-tool l
 }
 ```
 
-`always-needed` tools appear directly in the client's tool list as `always-needed_toolname`. `partially-direct` exposes only `ping` and `list_interfaces` directly — its other tools are still discoverable via `mcp({ server: "partially-direct" })`. `large-api` tools are only visible after calling `mcp({})` or `mcp({ search: "..." })`.
+`always-needed` tools appear directly in the client's tool list as `always-needed-toolname`. `partially-direct` exposes only `ping` and `list_interfaces` directly — its other tools are still discoverable via `mcp({ server: "partially-direct" })`. `large-api` tools are only visible after calling `mcp({})` or `mcp({ search: "..." })`.
 
 > [!NOTE]
 > `mcp({})` and `mcp({ search })` only list tools not exposed via `directTools`.

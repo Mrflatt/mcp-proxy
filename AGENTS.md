@@ -20,7 +20,7 @@ proxy/
   proxy.go                Proxy struct: upstream client pool, env expansion, header transport
   discover.go             mcp_discover + mcp_search tool handlers
   call.go                 mcp_call tool handler
-  direct.go               direct mode: upstream tools re-registered as servername__toolname
+  direct.go               direct mode: upstream tools re-registered as servername-toolname
 auth/
   auth.go                 factory: New(cfg) → auth.OAuthHandler
   bearer.go               static bearer token
@@ -41,7 +41,7 @@ Use `mcp.AddTool` (generic) for all tool registrations — not `server.AddTool` 
 ```go
 // Good
 type callInput struct {
-    Tool      string         `json:"tool"      jsonschema:"Tool in server__toolname format"`
+    Tool      string         `json:"tool"      jsonschema:"Tool in server-toolname format"`
     Arguments map[string]any `json:"arguments,omitempty" jsonschema:"Tool arguments"`
 }
 
@@ -70,7 +70,7 @@ once.Do(func() { ts, err = ... })
 
 All logging goes to stderr via `log/slog`. Never write to stdout — it is the MCP wire.
 
-Tool names in proxy mode: `servername__toolname` (double underscore). Split with `strings.Cut(name, "__")`.
+Tool names in proxy mode: `servername-toolname` (hyphen separator). The fallback resolver matches known server name prefixes, so hyphenated server names work correctly.
 
 Env values in config support `${VAR}` interpolation via `os.Expand`.
 
@@ -82,9 +82,9 @@ Env values in config support `${VAR}` interpolation via `os.Expand`.
 
 **Proxy mode (default):** exposes `mcp_discover`, `mcp_search`, `mcp_call`. Only sessions not marked direct are included.
 
-**Direct mode:** tools registered as `servername__toolname` (or just `toolname` with `noPrefix`). Activated by `--direct` flag (all servers) or `"direct": true` per server in config. Direct mode connects eagerly at registration time to list tools, but handlers reconnect on session drop.
+**Direct mode:** tools registered as `servername-toolname` (or just `toolname` with `noPrefix`). Activated by `--direct` flag (all servers) or `"direct": true` per server in config. Direct mode connects eagerly at registration time to list tools, but handlers reconnect on session drop.
 
-**`noPrefix`:** per-server flag to omit the server name prefix. Only safe when tool names are unique across all servers. `mcp_call` uses a routes map (refreshed on each discover/search call) to resolve unprefixed names; falls back to `__`-splitting for prefixed names.
+**`noPrefix`:** per-server flag to omit the server name prefix. Only safe when tool names are unique across all servers. `mcp_call` uses a routes map (refreshed on each discover/search call) to resolve unprefixed names; falls back to server-name prefix matching for prefixed names.
 
 **`excludeTools`:** per-server list of upstream tool names to hide. Applied in discover, search, and direct registration.
 

@@ -117,7 +117,7 @@ func (p *Proxy) discoverName(serverName, toolName string) string {
 	if p.noPrefix[serverName] {
 		return toolName
 	}
-	return serverName + "_" + toolName
+	return serverName + "-" + toolName
 }
 
 // isExcluded reports whether tool is excluded for the given server.

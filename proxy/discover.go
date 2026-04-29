@@ -45,7 +45,7 @@ func (p *Proxy) RegisterDiscover() {
 mcp({}) lists all servers with tool counts.
 mcp({server:"name"}) lists tools for a specific server.
 mcp({search:"query"}) searches tools by name across all servers.
-mcp({tool:"server_tool",arguments:{...}}) calls a tool.`,
+mcp({tool:"server-tool",arguments:{...}}) calls a tool.`,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input mcpInput) (*mcp.CallToolResult, any, error) {
 		if input.Tool != "" {
 			return p.callTool(ctx, input.Tool, input.Arguments)
@@ -247,7 +247,8 @@ func (p *Proxy) callTool(ctx context.Context, discoverName string, arguments map
 }
 
 // resolveCall returns the connector and original tool name for a discover-side
-// tool name. It first checks the routes map, then falls back to splitting on "_".
+// tool name. It first checks the routes map, then falls back to matching a
+// known server name prefix (servername-toolname).
 func (p *Proxy) resolveCall(discoverName string) (*connector, string, error) {
 	p.routesMu.RLock()
 	route, ok := p.routes[discoverName]
@@ -260,13 +261,11 @@ func (p *Proxy) resolveCall(discoverName string) (*connector, string, error) {
 		}
 	}
 
-	serverName, toolName, found := strings.Cut(discoverName, "_")
-	if !found {
-		return nil, "", fmt.Errorf("tool %q not found — call mcp({}) first", discoverName)
+	for serverName, conn := range p.proxyConnectors() {
+		prefix := serverName + "-"
+		if strings.HasPrefix(discoverName, prefix) {
+			return conn, strings.TrimPrefix(discoverName, prefix), nil
+		}
 	}
-	conn, exists := p.proxyConnectors()[serverName]
-	if !exists {
-		return nil, "", fmt.Errorf("unknown server %q (from tool %q)", serverName, discoverName)
-	}
-	return conn, toolName, nil
+	return nil, "", fmt.Errorf("tool %q not found — call mcp({}) first", discoverName)
 }

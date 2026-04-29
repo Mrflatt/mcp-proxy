@@ -20,7 +20,7 @@ func TestDiscoverName(t *testing.T) {
 		toolName   string
 		want       string
 	}{
-		{name: "prefixed", serverName: "my-server", toolName: "list_items", want: "my-server_list_items"},
+		{name: "prefixed", serverName: "my-server", toolName: "list_items", want: "my-server-list_items"},
 		{name: "no prefix", noPrefix: true, serverName: "my-server", toolName: "list_items", want: "list_items"},
 	}
 	for _, tt := range tests {
@@ -126,9 +126,9 @@ func TestResolveCall(t *testing.T) {
 	p.connectors["server-a"] = &connector{name: "server-a", cfg: config.ServerConfig{Command: "dummy"}}
 
 	// Seed routes as mcp() would.
-	p.routes["server-a_list_items"] = toolRoute{serverName: "server-a", toolName: "list_items"}
+	p.routes["server-a-list_items"] = toolRoute{serverName: "server-a", toolName: "list_items"}
 
-	conn, tool, err := p.resolveCall("server-a_list_items")
+	conn, tool, err := p.resolveCall("server-a-list_items")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -143,9 +143,9 @@ func TestResolveCall(t *testing.T) {
 func TestResolveCallFallback(t *testing.T) {
 	p := New()
 	p.connectors["server-a"] = &connector{name: "server-a", cfg: config.ServerConfig{Command: "dummy"}}
-	// No routes seeded — tests the _ fallback.
+	// No routes seeded — tests the server-name prefix fallback.
 
-	conn, tool, err := p.resolveCall("server-a_list_items")
+	conn, tool, err := p.resolveCall("server-a-list_items")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
