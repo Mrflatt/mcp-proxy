@@ -84,7 +84,7 @@ Env values in config support `${VAR}` interpolation via `os.Expand`.
 
 **Direct mode:** tools registered as `servername-toolname` (or just `toolname` with `noPrefix`). Activated by `--direct` flag (all servers) or `"direct": true` per server in config. Direct mode connects eagerly at registration time to list tools, but handlers reconnect on session drop.
 
-**`noPrefix`:** per-server flag to omit the server name prefix. Only safe when tool names are unique across all servers. `mcp_call` uses a routes map (refreshed on each discover/search call) to resolve unprefixed names; falls back to server-name prefix matching for prefixed names.
+**`noPrefix`:** per-server setting to omit the server name prefix. Accepts `true` (all tools) or `["tool1","tool2"]` (specific tools). Only safe when unprefixed names are unique across all servers. `mcp_call` uses a routes map (refreshed on each discover/search call) to resolve unprefixed names; falls back to server-name prefix matching for prefixed names.
 
 **`excludeTools`:** per-server list of upstream tool names to hide. Applied in discover, search, and direct registration.
 

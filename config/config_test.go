@@ -83,3 +83,62 @@ func TestDirectToolsIncludes(t *testing.T) {
 		})
 	}
 }
+
+func TestNoPrefixUnmarshal(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantAll   bool
+		wantNames []string
+		wantErr   bool
+	}{
+		{name: "true", input: `true`, wantAll: true},
+		{name: "false", input: `false`, wantAll: false},
+		{name: "list", input: `["get_issue","search"]`, wantNames: []string{"get_issue", "search"}},
+		{name: "empty list", input: `[]`, wantNames: []string{}},
+		{name: "invalid", input: `"string"`, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var n NoPrefix
+			err := json.Unmarshal([]byte(tt.input), &n)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if n.All != tt.wantAll {
+				t.Errorf("All = %v, want %v", n.All, tt.wantAll)
+			}
+			if tt.wantNames != nil && len(n.Names) != len(tt.wantNames) {
+				t.Errorf("Names = %v, want %v", n.Names, tt.wantNames)
+			}
+		})
+	}
+}
+
+func TestNoPrefixIncludes(t *testing.T) {
+	tests := []struct {
+		name     string
+		n        NoPrefix
+		toolName string
+		want     bool
+	}{
+		{name: "all includes anything", n: NoPrefix{All: true}, toolName: "whatever", want: true},
+		{name: "list includes match", n: NoPrefix{Names: []string{"get_issue", "search"}}, toolName: "get_issue", want: true},
+		{name: "list excludes non-match", n: NoPrefix{Names: []string{"get_issue"}}, toolName: "search", want: false},
+		{name: "empty includes nothing", n: NoPrefix{}, toolName: "anything", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.n.Includes(tt.toolName); got != tt.want {
+				t.Errorf("Includes(%q) = %v, want %v", tt.toolName, got, tt.want)
+			}
+		})
+	}
+}

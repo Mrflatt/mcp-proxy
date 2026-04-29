@@ -45,6 +45,40 @@ func (d *DirectTools) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// NoPrefix controls which tools omit the server name prefix.
+// It unmarshals from either a JSON boolean or a JSON array of tool name strings.
+type NoPrefix struct {
+	All   bool
+	Names []string
+}
+
+func (n *NoPrefix) Enabled() bool { return n.All || len(n.Names) > 0 }
+func (n *NoPrefix) Includes(name string) bool {
+	if n.All {
+		return true
+	}
+	for _, s := range n.Names {
+		if s == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (n *NoPrefix) UnmarshalJSON(data []byte) error {
+	var b bool
+	if err := json.Unmarshal(data, &b); err == nil {
+		n.All = b
+		return nil
+	}
+	var names []string
+	if err := json.Unmarshal(data, &names); err != nil {
+		return fmt.Errorf("noPrefix must be a boolean or array of strings: %w", err)
+	}
+	n.Names = names
+	return nil
+}
+
 type ServerConfig struct {
 	// HTTP upstream
 	URL     string            `json:"url,omitempty"`
@@ -64,8 +98,9 @@ type ServerConfig struct {
 	// ["tool1","tool2"] = only those tools (rest go through discover/call).
 	DirectTools DirectTools `json:"directTools,omitempty"`
 	// NoPrefix omits the server name prefix from tool names (toolname instead of server-toolname).
+	// true = all tools, ["tool1","tool2"] = only those tools.
 	// Use only when tool names are unique across all servers.
-	NoPrefix bool `json:"noPrefix,omitempty"`
+	NoPrefix NoPrefix `json:"noPrefix,omitempty"`
 	// ExcludeTools lists tool names to hide from the LLM.
 	ExcludeTools []string `json:"excludeTools,omitempty"`
 }

@@ -15,13 +15,15 @@ func newTestProxy(servers map[string]config.ServerConfig) *Proxy {
 func TestDiscoverName(t *testing.T) {
 	tests := []struct {
 		name       string
-		noPrefix   bool
+		noPrefix   config.NoPrefix
 		serverName string
 		toolName   string
 		want       string
 	}{
 		{name: "prefixed", serverName: "my-server", toolName: "list_items", want: "my-server-list_items"},
-		{name: "no prefix", noPrefix: true, serverName: "my-server", toolName: "list_items", want: "list_items"},
+		{name: "no prefix all", noPrefix: config.NoPrefix{All: true}, serverName: "my-server", toolName: "list_items", want: "list_items"},
+		{name: "no prefix specific match", noPrefix: config.NoPrefix{Names: []string{"list_items"}}, serverName: "my-server", toolName: "list_items", want: "list_items"},
+		{name: "no prefix specific miss", noPrefix: config.NoPrefix{Names: []string{"other_tool"}}, serverName: "my-server", toolName: "list_items", want: "my-server-list_items"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

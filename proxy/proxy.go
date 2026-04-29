@@ -23,7 +23,7 @@ type Proxy struct {
 	connectors  map[string]*connector
 	fullyDirect map[string]bool            // servers where ALL tools are direct
 	directTools map[string]map[string]bool // server → set of tool names exposed directly
-	noPrefix    map[string]bool            // servers with prefix disabled
+	noPrefix    map[string]config.NoPrefix  // per-server noPrefix config
 	exclude     map[string]map[string]bool // server → set of excluded tool names
 
 	// routes maps the tool name as exposed by mcp_discover/mcp_search to its
@@ -39,7 +39,7 @@ func New() *Proxy {
 		connectors:  make(map[string]*connector),
 		fullyDirect: make(map[string]bool),
 		directTools: make(map[string]map[string]bool),
-		noPrefix:    make(map[string]bool),
+		noPrefix:    make(map[string]config.NoPrefix),
 		exclude:     make(map[string]map[string]bool),
 		routes:      make(map[string]toolRoute),
 		server:      mcp.NewServer(&mcp.Implementation{Name: "mcp-proxy", Version: "0.1.0"}, nil),
@@ -57,8 +57,8 @@ func (p *Proxy) Connect(_ context.Context, cfg *config.Config, handlers map[stri
 			}
 			p.exclude[name] = set
 		}
-		if sc.NoPrefix {
-			p.noPrefix[name] = true
+		if sc.NoPrefix.Enabled() {
+			p.noPrefix[name] = sc.NoPrefix
 		}
 		if sc.DirectTools.All {
 			p.fullyDirect[name] = true
@@ -114,7 +114,7 @@ func (p *Proxy) isDirectTool(serverName, toolName string) bool {
 
 // discoverName returns the tool name as exposed to the LLM for a given server + tool.
 func (p *Proxy) discoverName(serverName, toolName string) string {
-	if p.noPrefix[serverName] {
+	if np, ok := p.noPrefix[serverName]; ok && np.Includes(toolName) {
 		return toolName
 	}
 	return serverName + "-" + toolName

@@ -159,7 +159,7 @@ Override with: `mcp-proxy --config /path/to/config.json`
 | `eager` | bool | Connect at startup instead of on first use |
 | `keepalive` | string | Ping interval to keep the connection alive (e.g. `"30s"`) |
 | `directTools` | `true` or `["tool1","tool2"]` | Expose all or specific tools directly, bypassing the meta-tool layer |
-| `noPrefix` | bool | Omit the server name prefix from tool names (`toolname` instead of `server-toolname`). Only safe when tool names are unique across all servers |
+| `noPrefix` | `true` or `["tool1","tool2"]` | Omit the server name prefix from tool names (`toolname` instead of `server-toolname`). `true` = all tools, array = only those tools. Only safe when unprefixed names are unique across all servers |
 | `excludeTools` | array | Upstream tool names to hide from the LLM |
 
 ### Authentication
