@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
+	"runtime/debug"
 
 	"github.com/Mrflatt/mcp-proxy/auth"
 	"github.com/Mrflatt/mcp-proxy/config"
@@ -13,10 +16,48 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+func version() string {
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "unknown"
+	}
+	v := bi.Main.Version
+	for _, s := range bi.Settings {
+		if s.Key == "vcs.revision" && len(s.Value) >= 7 {
+			v += " (" + s.Value[:7] + ")"
+			break
+		}
+	}
+	return v
+}
+
+func selfUpdate() error {
+	cmd := exec.Command("go", "install", "github.com/Mrflatt/mcp-proxy/cmd/mcp-proxy@latest")
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 func main() {
 	configPath := flag.String("config", "", "path to config file (default: ~/.config/mcp-proxy/config.json)")
 	directAll := flag.Bool("direct", false, "expose all upstream tools directly (overrides per-server config)")
+	showVersion := flag.Bool("version", false, "print version and exit")
+	update := flag.Bool("update", false, "self-update to latest version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Fprintln(os.Stderr, "mcp-proxy", version())
+		return
+	}
+	if *update {
+		fmt.Fprintln(os.Stderr, "updating mcp-proxy to latest...")
+		if err := selfUpdate(); err != nil {
+			fmt.Fprintln(os.Stderr, "update failed:", err)
+			os.Exit(1)
+		}
+		fmt.Fprintln(os.Stderr, "updated successfully")
+		return
+	}
 
 	// All logging to stderr — stdout is the MCP wire.
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
