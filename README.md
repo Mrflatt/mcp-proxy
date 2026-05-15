@@ -10,7 +10,7 @@ Instead of flooding the LLM context with dozens of tools from multiple servers, 
 go install github.com/Mrflatt/mcp-proxy/cmd/mcp-proxy@latest
 ```
 
-Requires Go 1.21+.
+Requires Go 1.24+.
 
 ## Quick start
 
@@ -131,6 +131,7 @@ Override with: `mcp-proxy --config /path/to/config.json`
       "eager": true,
       "keepalive": "30s",
       "excludeTools": ["internal_tool", "debug_tool"],
+      "includeTools": ["public_tool_1", "public_tool_2"],
       "directTools": false
     },
 
@@ -160,6 +161,7 @@ Override with: `mcp-proxy --config /path/to/config.json`
 | `keepalive` | string | Ping interval to keep the connection alive (e.g. `"30s"`) |
 | `directTools` | `true` or `["tool1","tool2"]` | Expose all or specific tools directly, bypassing the meta-tool layer |
 | `noPrefix` | `true` or `["tool1","tool2"]` | Omit the server name prefix from tool names (`toolname` instead of `server-toolname`). `true` = all tools, array = only those tools. Only safe when unprefixed names are unique across all servers |
+| `includeTools` | array | Whitelist of tool names to expose. When set, all other tools are hidden. Mutually exclusive with `excludeTools` |
 | `excludeTools` | array | Upstream tool names to hide from the LLM |
 
 ### Authentication
@@ -260,3 +262,5 @@ You can expose some servers directly while keeping others behind the meta-tool l
 |------|---------|-------------|
 | `--config` | `~/.config/mcp-proxy/config.json` | Path to config file |
 | `--direct` | `false` | Expose all upstream tools directly (overrides per-server config) |
+| `--version` | | Print version and exit |
+| `--update` | | Self-update to latest version via `go install` and exit |

@@ -101,6 +101,9 @@ type ServerConfig struct {
 	// true = all tools, ["tool1","tool2"] = only those tools.
 	// Use only when tool names are unique across all servers.
 	NoPrefix NoPrefix `json:"noPrefix,omitempty"`
+	// IncludeTools lists the only tool names to expose. When set, all other
+	// tools are hidden. Mutually exclusive with ExcludeTools.
+	IncludeTools []string `json:"includeTools,omitempty"`
 	// ExcludeTools lists tool names to hide from the LLM.
 	ExcludeTools []string `json:"excludeTools,omitempty"`
 }

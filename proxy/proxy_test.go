@@ -53,6 +53,26 @@ func TestIsExcluded(t *testing.T) {
 	}
 }
 
+func TestIsExcludedWithIncludeTools(t *testing.T) {
+	p := newTestProxy(map[string]config.ServerConfig{
+		"server-a": {Command: "dummy", IncludeTools: []string{"list_items", "get_item"}},
+		"server-b": {Command: "dummy"},
+	})
+
+	if p.isExcluded("server-a", "list_items") {
+		t.Error("list_items should be included")
+	}
+	if p.isExcluded("server-a", "get_item") {
+		t.Error("get_item should be included")
+	}
+	if !p.isExcluded("server-a", "delete_item") {
+		t.Error("delete_item should be excluded (not in includeTools)")
+	}
+	if p.isExcluded("server-b", "anything") {
+		t.Error("server-b has no include/exclude, nothing should be excluded")
+	}
+}
+
 func TestIsDirectTool(t *testing.T) {
 	var dtAll config.DirectTools
 	_ = dtAll.UnmarshalJSON([]byte("true"))

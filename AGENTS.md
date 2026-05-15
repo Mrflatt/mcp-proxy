@@ -88,6 +88,8 @@ Env values in config support `${VAR}` interpolation via `os.Expand`.
 
 **`excludeTools`:** per-server list of upstream tool names to hide. Applied in discover, search, and direct registration.
 
+**`includeTools`:** per-server whitelist of upstream tool names to expose. When set, all other tools are hidden. Mutually exclusive with `excludeTools`. Applied in discover, search, and direct registration.
+
 ## Boundaries
 
 - Never log to stdout.

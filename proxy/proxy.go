@@ -24,6 +24,7 @@ type Proxy struct {
 	fullyDirect map[string]bool            // servers where ALL tools are direct
 	directTools map[string]map[string]bool // server → set of tool names exposed directly
 	noPrefix    map[string]config.NoPrefix  // per-server noPrefix config
+	include     map[string]map[string]bool // server → set of included tool names (whitelist)
 	exclude     map[string]map[string]bool // server → set of excluded tool names
 
 	// routes maps the tool name as exposed by mcp_discover/mcp_search to its
@@ -40,6 +41,7 @@ func New() *Proxy {
 		fullyDirect: make(map[string]bool),
 		directTools: make(map[string]map[string]bool),
 		noPrefix:    make(map[string]config.NoPrefix),
+		include:     make(map[string]map[string]bool),
 		exclude:     make(map[string]map[string]bool),
 		routes:      make(map[string]toolRoute),
 		server:      mcp.NewServer(&mcp.Implementation{Name: "mcp-proxy", Version: "0.1.0"}, nil),
@@ -50,6 +52,13 @@ func (p *Proxy) Server() *mcp.Server { return p.server }
 
 func (p *Proxy) Connect(_ context.Context, cfg *config.Config, handlers map[string]sdkauth.OAuthHandler) {
 	for name, sc := range cfg.Servers {
+		if len(sc.IncludeTools) > 0 {
+			set := make(map[string]bool, len(sc.IncludeTools))
+			for _, t := range sc.IncludeTools {
+				set[t] = true
+			}
+			p.include[name] = set
+		}
 		if len(sc.ExcludeTools) > 0 {
 			set := make(map[string]bool, len(sc.ExcludeTools))
 			for _, t := range sc.ExcludeTools {
@@ -121,7 +130,12 @@ func (p *Proxy) discoverName(serverName, toolName string) string {
 }
 
 // isExcluded reports whether tool is excluded for the given server.
+// A tool is excluded if it appears in excludeTools, or if includeTools is
+// set and the tool is not in it.
 func (p *Proxy) isExcluded(serverName, toolName string) bool {
+	if inc, ok := p.include[serverName]; ok {
+		return !inc[toolName]
+	}
 	return p.exclude[serverName][toolName]
 }
 
