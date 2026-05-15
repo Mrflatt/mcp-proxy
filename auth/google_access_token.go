@@ -53,8 +53,14 @@ func (h *googleAccessTokenHandler) TokenSource(ctx context.Context) (oauth2.Toke
 // token source so the next request re-reads ADC credentials from disk.
 func (h *googleAccessTokenHandler) Authorize(_ context.Context, _ *http.Request, resp *http.Response) error {
 	resp.Body.Close()
+	h.Reset()
+	return nil
+}
+
+// Reset clears the cached token source so it is re-created from current ADC
+// credentials on the next call.
+func (h *googleAccessTokenHandler) Reset() {
 	h.mu.Lock()
 	h.ts = nil
 	h.mu.Unlock()
-	return nil
 }

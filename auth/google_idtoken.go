@@ -53,8 +53,15 @@ func (h *googleIDTokenHandler) TokenSource(ctx context.Context) (oauth2.TokenSou
 // token source so the next request re-reads ADC credentials from disk.
 func (h *googleIDTokenHandler) Authorize(_ context.Context, _ *http.Request, resp *http.Response) error {
 	resp.Body.Close()
+	h.Reset()
+	return nil
+}
+
+// Reset clears the cached token source so it is re-created from current ADC
+// credentials on the next call. Called by Authorize on 401/403 and by the
+// connector on transport-level auth failures (e.g. RAPT expiry).
+func (h *googleIDTokenHandler) Reset() {
 	h.mu.Lock()
 	h.ts = nil
 	h.mu.Unlock()
-	return nil
 }

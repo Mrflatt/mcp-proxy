@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -79,7 +78,7 @@ func (p *Proxy) listServers(ctx context.Context) (*mcp.CallToolResult, any, erro
 			var count int
 			for tool, err := range sess.Tools(ctx, nil) {
 				if err != nil {
-					if errors.Is(err, mcp.ErrConnectionClosed) {
+					if shouldReset(err) {
 						conn.reset()
 					}
 					results <- countResult{name: serverName, err: err}
@@ -140,7 +139,7 @@ func (p *Proxy) listTools(ctx context.Context, serverName, query string) (*mcp.C
 			routes := make(map[string]toolRoute)
 			for tool, err := range sess.Tools(ctx, nil) {
 				if err != nil {
-					if errors.Is(err, mcp.ErrConnectionClosed) {
+					if shouldReset(err) {
 						conn.reset()
 					}
 					results <- serverResult{name: serverName, err: err}
@@ -224,26 +223,38 @@ func matchesQuery(words []string, serverName, toolName string) bool {
 }
 
 // callTool dispatches a tool call to the correct upstream server.
+// On retriable errors (broken session, stale auth) it resets and retries once.
 func (p *Proxy) callTool(ctx context.Context, discoverName string, arguments map[string]any) (*mcp.CallToolResult, any, error) {
 	conn, toolName, err := p.resolveCall(discoverName)
 	if err != nil {
 		return nil, nil, err
 	}
-	sess, err := conn.get(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	result, err := sess.CallTool(ctx, &mcp.CallToolParams{
-		Name:      toolName,
-		Arguments: arguments,
-	})
-	if errors.Is(err, mcp.ErrConnectionClosed) {
+	result, err := p.doCall(ctx, conn, toolName, arguments)
+	if err != nil && shouldReset(err) {
 		conn.reset()
+		if ctx.Err() == nil {
+			slog.Info("retrying after session reset", "server", conn.name, "tool", toolName)
+			result, err = p.doCall(ctx, conn, toolName, arguments)
+			if err != nil && shouldReset(err) {
+				conn.reset()
+			}
+		}
 	}
 	if err != nil {
 		return nil, nil, err
 	}
 	return result, nil, nil
+}
+
+func (p *Proxy) doCall(ctx context.Context, conn *connector, toolName string, arguments map[string]any) (*mcp.CallToolResult, error) {
+	sess, err := conn.get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return sess.CallTool(ctx, &mcp.CallToolParams{
+		Name:      toolName,
+		Arguments: arguments,
+	})
 }
 
 // resolveCall returns the connector and original tool name for a discover-side

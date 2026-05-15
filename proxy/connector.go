@@ -2,9 +2,11 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,11 +41,36 @@ func (c *connector) get(ctx context.Context) (*mcp.ClientSession, error) {
 	return sess, nil
 }
 
+// Resetter is implemented by auth handlers that support explicit cache
+// invalidation (e.g. clearing a stale token source after RAPT expiry).
+type Resetter interface {
+	Reset()
+}
+
 // reset clears the cached session so the next get() re-dials.
+// It also resets the auth handler's cached token source so fresh ADC
+// credentials are picked up — this handles RAPT expiry and
+// `gcloud auth application-default login` refreshes.
 func (c *connector) reset() {
 	c.mu.Lock()
 	c.sess = nil
 	c.mu.Unlock()
+	if r, ok := c.handler.(Resetter); ok {
+		r.Reset()
+	}
+}
+
+// shouldReset reports whether an error indicates the upstream session is
+// broken and the connector should be reset. This covers connection drops,
+// stale sessions, and transport-level rejections (including auth failures).
+func shouldReset(err error) bool {
+	if errors.Is(err, mcp.ErrConnectionClosed) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "Bad Request") ||
+		strings.Contains(msg, "rejected by transport") ||
+		strings.Contains(msg, "client is closing")
 }
 
 // dial creates the transport from cfg and returns a connected MCP session.

@@ -3,7 +3,6 @@ package proxy
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 
@@ -70,8 +69,22 @@ func (p *Proxy) RegisterDirect(ctx context.Context, serverNames ...string) error
 					Name:      tn,
 					Arguments: args,
 				})
-				if errors.Is(err, mcp.ErrConnectionClosed) {
+				if err != nil && shouldReset(err) {
 					c.reset()
+					if ctx.Err() == nil {
+						slog.Info("retrying after session reset", "server", c.name, "tool", tn)
+						sess, err = c.get(ctx)
+						if err != nil {
+							return nil, nil, err
+						}
+						result, err = sess.CallTool(ctx, &mcp.CallToolParams{
+							Name:      tn,
+							Arguments: args,
+						})
+						if err != nil && shouldReset(err) {
+							c.reset()
+						}
+					}
 				}
 				if err != nil {
 					return nil, nil, err
