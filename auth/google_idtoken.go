@@ -34,13 +34,13 @@ func (h *googleIDTokenHandler) TokenSource(ctx context.Context) (oauth2.TokenSou
 		err error
 	)
 	if h.cfg.ServiceAccount != "" {
-		ts, err = impersonate.IDTokenSource(ctx, impersonate.IDTokenConfig{
+		ts, err = impersonate.IDTokenSource(context.Background(), impersonate.IDTokenConfig{
 			TargetPrincipal: h.cfg.ServiceAccount,
 			Audience:        h.cfg.Audience,
 			IncludeEmail:    h.cfg.IncludeEmail,
 		})
 	} else {
-		ts, err = idtoken.NewTokenSource(ctx, h.cfg.Audience)
+		ts, err = idtoken.NewTokenSource(context.Background(), h.cfg.Audience)
 	}
 	if err != nil {
 		return nil, err // not cached — caller can retry after fixing credentials

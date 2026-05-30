@@ -35,12 +35,12 @@ func (h *googleAccessTokenHandler) TokenSource(ctx context.Context) (oauth2.Toke
 		err error
 	)
 	if h.cfg.ServiceAccount != "" {
-		ts, err = impersonate.CredentialsTokenSource(ctx, impersonate.CredentialsConfig{
+		ts, err = impersonate.CredentialsTokenSource(context.Background(), impersonate.CredentialsConfig{
 			TargetPrincipal: h.cfg.ServiceAccount,
 			Scopes:          h.cfg.Scopes,
 		})
 	} else {
-		ts, err = google.DefaultTokenSource(ctx, h.cfg.Scopes...)
+		ts, err = google.DefaultTokenSource(context.Background(), h.cfg.Scopes...)
 	}
 	if err != nil {
 		return nil, err // not cached — caller can retry after fixing credentials

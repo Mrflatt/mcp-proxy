@@ -35,6 +35,14 @@ func (c *connector) get(ctx context.Context) (*mcp.ClientSession, error) {
 	}
 	sess, err := dial(ctx, c.cfg, c.handler)
 	if err != nil {
+		// If the dial failed due to an auth error, reset the token source so
+		// the next attempt re-reads ADC credentials from disk (handles RAPT
+		// expiry after gcloud auth application-default login).
+		if shouldReset(err) {
+			if r, ok := c.handler.(Resetter); ok {
+				r.Reset()
+			}
+		}
 		return nil, fmt.Errorf("server %q: %w", c.name, err)
 	}
 	c.sess = sess
@@ -62,7 +70,8 @@ func (c *connector) reset() {
 
 // shouldReset reports whether an error indicates the upstream session is
 // broken and the connector should be reset. This covers connection drops,
-// stale sessions, and transport-level rejections (including auth failures).
+// stale sessions, transport-level rejections, and auth failures (401/403)
+// such as RAPT token expiry.
 func shouldReset(err error) bool {
 	if errors.Is(err, mcp.ErrConnectionClosed) {
 		return true
@@ -70,7 +79,13 @@ func shouldReset(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "Bad Request") ||
 		strings.Contains(msg, "rejected by transport") ||
-		strings.Contains(msg, "client is closing")
+		strings.Contains(msg, "client is closing") ||
+		strings.Contains(msg, "401") ||
+		strings.Contains(msg, "403") ||
+		strings.Contains(msg, "Unauthorized") ||
+		strings.Contains(msg, "Forbidden") ||
+		strings.Contains(msg, "invalid_rapt") ||
+		strings.Contains(msg, "invalid_grant")
 }
 
 // dial creates the transport from cfg and returns a connected MCP session.
