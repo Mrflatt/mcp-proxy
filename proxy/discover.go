@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -31,9 +32,10 @@ type toolListing struct {
 }
 
 type toolSummary struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	InputSchema any    `json:"inputSchema,omitempty"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	InputSchema  any    `json:"inputSchema,omitempty"`
+	OutputSchema any    `json:"outputSchema,omitempty"`
 }
 
 func (p *Proxy) RegisterDiscover() {
@@ -70,20 +72,13 @@ func (p *Proxy) listServers(ctx context.Context) (*mcp.CallToolResult, any, erro
 	var wg sync.WaitGroup
 	for serverName, conn := range conns {
 		wg.Go(func() {
-			sess, err := conn.get(ctx)
+			tools, err := p.toolsFor(ctx, serverName, conn)
 			if err != nil {
 				results <- countResult{name: serverName, err: err}
 				return
 			}
 			var count int
-			for tool, err := range sess.Tools(ctx, nil) {
-				if err != nil {
-					if shouldReset(err) {
-						conn.reset()
-					}
-					results <- countResult{name: serverName, err: err}
-					return
-				}
+			for _, tool := range tools {
 				if !p.isExcluded(serverName, tool.Name) && !p.isDirectTool(serverName, tool.Name) {
 					count++
 				}
@@ -130,35 +125,12 @@ func (p *Proxy) listTools(ctx context.Context, serverName, query string) (*mcp.C
 	var wg sync.WaitGroup
 	for serverName, conn := range conns {
 		wg.Go(func() {
-			sess, err := conn.get(ctx)
+			tools, err := p.toolsFor(ctx, serverName, conn)
 			if err != nil {
 				results <- serverResult{name: serverName, err: err}
 				return
 			}
-			var matched []toolSummary
-			routes := make(map[string]toolRoute)
-			for tool, err := range sess.Tools(ctx, nil) {
-				if err != nil {
-					if shouldReset(err) {
-						conn.reset()
-					}
-					results <- serverResult{name: serverName, err: err}
-					return
-				}
-				if p.isExcluded(serverName, tool.Name) || p.isDirectTool(serverName, tool.Name) {
-					continue
-				}
-				discName := p.discoverName(serverName, tool.Name)
-				routes[discName] = toolRoute{serverName: serverName, toolName: tool.Name}
-				if len(words) > 0 && !matchesQuery(words, strings.ToLower(serverName), strings.ToLower(tool.Name)) {
-					continue
-				}
-				matched = append(matched, toolSummary{
-					Name:        discName,
-					Description: tool.Description,
-					InputSchema: tool.InputSchema,
-				})
-			}
+			matched, routes := p.summarizeTools(serverName, tools, words)
 			results <- serverResult{name: serverName, tools: matched, routes: routes}
 		})
 	}
@@ -167,7 +139,10 @@ func (p *Proxy) listTools(ctx context.Context, serverName, query string) (*mcp.C
 
 	var tools []toolSummary
 	errs := make(map[string]string)
-	newRoutes := make(map[string]toolRoute, len(p.routes))
+	p.routesMu.RLock()
+	routeCapacity := len(p.routes)
+	p.routesMu.RUnlock()
+	newRoutes := make(map[string]toolRoute, routeCapacity)
 
 	for r := range results {
 		if r.err != nil {
@@ -193,6 +168,95 @@ func (p *Proxy) listTools(ctx context.Context, serverName, query string) (*mcp.C
 		errsOut = errs
 	}
 	return nil, toolListing{Tools: tools, Errors: errsOut}, nil
+}
+
+func (p *Proxy) toolsFor(ctx context.Context, serverName string, conn *connector) ([]cachedTool, error) {
+	if p.cache != nil {
+		if tools, ok := p.cache.tools(serverName); ok {
+			p.refreshToolsInBackground(serverName, conn)
+			return tools, nil
+		}
+	}
+
+	tools, err := p.fetchTools(ctx, serverName, conn)
+	if err != nil {
+		return nil, err
+	}
+	p.storeTools(serverName, tools)
+	return tools, nil
+}
+
+func (p *Proxy) fetchTools(ctx context.Context, serverName string, conn *connector) ([]cachedTool, error) {
+	sess, err := conn.get(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var upstream []*mcp.Tool
+	for tool, err := range sess.Tools(ctx, nil) {
+		if err != nil {
+			if shouldReset(err) {
+				conn.reset()
+			}
+			return nil, fmt.Errorf("list tools for %q: %w", serverName, err)
+		}
+		upstream = append(upstream, tool)
+	}
+	tools, err := cachedToolsFromUpstream(upstream)
+	if err != nil {
+		return nil, fmt.Errorf("cache tools for %q: %w", serverName, err)
+	}
+	return tools, nil
+}
+
+func (p *Proxy) storeTools(serverName string, tools []cachedTool) {
+	if p.cache == nil {
+		return
+	}
+	p.cache.replace(serverName, tools)
+	if err := p.cache.save(); err != nil {
+		slog.Warn("failed to save tool cache", "path", p.cache.path, "server", serverName, "error", err)
+	}
+}
+
+func (p *Proxy) refreshToolsInBackground(serverName string, conn *connector) {
+	if p.cache == nil || !p.cache.beginRefresh(serverName, time.Now()) {
+		return
+	}
+	go func() {
+		defer p.cache.endRefresh(serverName)
+		ctx, cancel := context.WithTimeout(context.Background(), toolCacheRefreshTimeout)
+		defer cancel()
+
+		tools, err := p.fetchTools(ctx, serverName, conn)
+		if err != nil {
+			slog.Warn("failed to refresh tool cache", "server", serverName, "error", err)
+			return
+		}
+		p.storeTools(serverName, tools)
+	}()
+}
+
+func (p *Proxy) summarizeTools(serverName string, tools []cachedTool, words []string) ([]toolSummary, map[string]toolRoute) {
+	var matched []toolSummary
+	routes := make(map[string]toolRoute)
+	for _, tool := range tools {
+		if p.isExcluded(serverName, tool.Name) || p.isDirectTool(serverName, tool.Name) {
+			continue
+		}
+		discName := p.discoverName(serverName, tool.Name)
+		routes[discName] = toolRoute{serverName: serverName, toolName: tool.Name}
+		if len(words) > 0 && !matchesQuery(words, strings.ToLower(serverName), strings.ToLower(tool.Name)) {
+			continue
+		}
+		matched = append(matched, toolSummary{
+			Name:         discName,
+			Description:  tool.Description,
+			InputSchema:  tool.InputSchema,
+			OutputSchema: tool.OutputSchema,
+		})
+	}
+	return matched, routes
 }
 
 // norm replaces hyphens with underscores for fuzzy matching.

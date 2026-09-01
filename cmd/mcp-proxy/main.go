@@ -39,6 +39,8 @@ func selfUpdate() error {
 }
 
 func main() {
+	defaultCachePath, cachePathErr := proxy.DefaultCachePath()
+	cachePath := flag.String("cache", defaultCachePath, "path to persistent tool cache (empty disables cache)")
 	configPath := flag.String("config", "", "path to config file (default: ~/.config/mcp-proxy/config.json)")
 	directAll := flag.Bool("direct", false, "expose all upstream tools directly (overrides per-server config)")
 	showVersion := flag.Bool("version", false, "print version and exit")
@@ -61,6 +63,9 @@ func main() {
 
 	// All logging to stderr — stdout is the MCP wire.
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	if cachePathErr != nil && *cachePath == "" {
+		slog.Warn("tool cache disabled", "error", cachePathErr)
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -80,7 +85,7 @@ func main() {
 		handlers[name] = h
 	}
 
-	p := proxy.New()
+	p := proxy.NewWithCache(*cachePath)
 	p.Connect(ctx, cfg, handlers)
 	p.ConnectEager(ctx)
 

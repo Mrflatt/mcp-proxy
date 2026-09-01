@@ -99,6 +99,8 @@ mcp-proxy exposes a single `mcp` tool to the AI client:
 
 Tool names use the `server-toolname` convention, so `my-api-list_users` identifies the `list_users` tool on the `my-api` server.
 
+Tool metadata is persisted in a JSON cache at the platform's user cache directory (`~/.cache/mcp-proxy/tools.json` on Linux). When cached metadata is available, `mcp({})` and searches return it immediately while a background refresh updates memory and the file. Cache entries older than five minutes are refreshed; a cold cache still fetches metadata from the upstream server. Override the location with `--cache`, or pass an empty value to disable caching.
+
 ### Direct mode
 
 When you want the LLM to see all upstream tools natively, use `--direct`:
@@ -261,6 +263,7 @@ You can expose some servers directly while keeping others behind the meta-tool l
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--config` | `~/.config/mcp-proxy/config.json` | Path to config file |
+| `--cache` | platform user cache directory | Path to persistent tool metadata cache; empty disables caching |
 | `--direct` | `false` | Expose all upstream tools directly (overrides per-server config) |
 | `--version` | | Print version and exit |
 | `--update` | | Self-update to latest version via `go install` and exit |

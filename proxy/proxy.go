@@ -23,9 +23,10 @@ type Proxy struct {
 	connectors  map[string]*connector
 	fullyDirect map[string]bool            // servers where ALL tools are direct
 	directTools map[string]map[string]bool // server → set of tool names exposed directly
-	noPrefix    map[string]config.NoPrefix  // per-server noPrefix config
+	noPrefix    map[string]config.NoPrefix // per-server noPrefix config
 	include     map[string]map[string]bool // server → set of included tool names (whitelist)
 	exclude     map[string]map[string]bool // server → set of excluded tool names
+	cache       *toolCache
 
 	// routes maps the tool name as exposed by mcp_discover/mcp_search to its
 	// upstream server and original tool name. Updated on every collectTools call.
@@ -36,7 +37,16 @@ type Proxy struct {
 }
 
 func New() *Proxy {
-	return &Proxy{
+	return newProxy("")
+}
+
+// NewWithCache creates a proxy that persists upstream tool metadata at cachePath.
+func NewWithCache(cachePath string) *Proxy {
+	return newProxy(cachePath)
+}
+
+func newProxy(cachePath string) *Proxy {
+	p := &Proxy{
 		connectors:  make(map[string]*connector),
 		fullyDirect: make(map[string]bool),
 		directTools: make(map[string]map[string]bool),
@@ -46,11 +56,26 @@ func New() *Proxy {
 		routes:      make(map[string]toolRoute),
 		server:      mcp.NewServer(&mcp.Implementation{Name: "mcp-proxy", Version: "0.1.0"}, nil),
 	}
+	if cachePath != "" {
+		p.cache = newToolCache(cachePath)
+	}
+	return p
 }
 
 func (p *Proxy) Server() *mcp.Server { return p.server }
 
 func (p *Proxy) Connect(_ context.Context, cfg *config.Config, handlers map[string]sdkauth.OAuthHandler) {
+	if p.cache != nil {
+		if err := p.cache.load(); err != nil {
+			slog.Warn("tool cache unavailable", "path", p.cache.path, "error", err)
+		}
+		identities := make(map[string]string, len(cfg.Servers))
+		for name, sc := range cfg.Servers {
+			identities[name] = serverCacheFingerprint(sc)
+		}
+		p.cache.setIdentities(identities)
+	}
+
 	for name, sc := range cfg.Servers {
 		if len(sc.IncludeTools) > 0 {
 			set := make(map[string]bool, len(sc.IncludeTools))
